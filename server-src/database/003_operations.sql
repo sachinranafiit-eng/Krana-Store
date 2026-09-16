@@ -1,0 +1,41 @@
+ALTER TABLE stock DROP CONSTRAINT stock_store_id_product_id_batch_id_key;
+ALTER TABLE stock ADD CONSTRAINT stock_unique UNIQUE NULLS NOT DISTINCT(store_id,product_id,batch_id);
+ALTER TABLE stock ADD CONSTRAINT stock_nonnegative CHECK(current_qty>=0);
+ALTER TABLE stock_movements ADD CONSTRAINT movement_valid CHECK(qty_in>=0 AND qty_out>=0 AND NOT(qty_in>0 AND qty_out>0));
+CREATE OR REPLACE FUNCTION apply_stock_movement() RETURNS TRIGGER AS $$ BEGIN
+ INSERT INTO stock(store_id,product_id,batch_id,current_qty) VALUES(NEW.store_id,NEW.product_id,NEW.batch_id,0)
+ ON CONFLICT(store_id,product_id,batch_id) DO NOTHING;
+ UPDATE stock SET current_qty=current_qty+NEW.qty_in-NEW.qty_out,updated_at=now() WHERE store_id=NEW.store_id AND product_id=NEW.product_id AND batch_id IS NOT DISTINCT FROM NEW.batch_id;
+ RETURN NEW; END; $$ LANGUAGE plpgsql;
+CREATE TRIGGER stock_from_ledger AFTER INSERT ON stock_movements FOR EACH ROW EXECUTE FUNCTION apply_stock_movement();
+CREATE OR REPLACE FUNCTION immutable_movement() RETURNS TRIGGER AS $$ BEGIN RAISE EXCEPTION 'Stock ledger is immutable; use a reversing movement'; END; $$ LANGUAGE plpgsql;
+CREATE TRIGGER ledger_immutable BEFORE UPDATE OR DELETE ON stock_movements FOR EACH ROW EXECUTE FUNCTION immutable_movement();
+CREATE SEQUENCE invoice_seq;
+CREATE SEQUENCE purchase_seq;
+CREATE SEQUENCE po_seq;
+ALTER TABLE sales ADD COLUMN request_key TEXT UNIQUE;
+ALTER TABLE sales ADD COLUMN notes TEXT;
+ALTER TABLE purchases ADD COLUMN request_key TEXT UNIQUE;
+ALTER TABLE sales_returns ADD COLUMN sale_item_id INT REFERENCES sale_items(id);
+ALTER TABLE sales_returns ADD COLUMN taxable_amount NUMERIC(14,2) DEFAULT 0;
+ALTER TABLE sales_returns ADD COLUMN cost_amount NUMERIC(14,2) DEFAULT 0;
+ALTER TABLE sales_returns ADD COLUMN refund_mode TEXT DEFAULT 'credit';
+ALTER TABLE purchase_returns ADD COLUMN purchase_item_id INT REFERENCES purchase_items(id);
+ALTER TABLE purchase_returns ADD COLUMN taxable_amount NUMERIC(14,2) DEFAULT 0;
+ALTER TABLE payments ADD COLUMN store_id INT REFERENCES stores(id) DEFAULT 1;
+ALTER TABLE payments ADD COLUMN notes TEXT;
+ALTER TABLE purchase_orders ADD COLUMN items JSONB DEFAULT '[]';
+ALTER TABLE purchase_orders ADD COLUMN expected_date DATE;
+ALTER TABLE purchase_orders ADD COLUMN notes TEXT;
+CREATE TABLE held_carts(id SERIAL PRIMARY KEY,store_id INT REFERENCES stores(id),name TEXT NOT NULL,cart JSONB NOT NULL,created_by INT REFERENCES users(id),created_at TIMESTAMPTZ DEFAULT now());
+CREATE TABLE auth_sessions(id TEXT PRIMARY KEY,user_id INT REFERENCES users(id),refresh_hash TEXT,expires_at TIMESTAMPTZ NOT NULL,created_at TIMESTAMPTZ DEFAULT now());
+ALTER TABLE products ADD CONSTRAINT product_prices_valid CHECK(cost_price>=0 AND mrp>=0 AND sale_price>=0 AND sale_price<=mrp AND gst_rate BETWEEN 0 AND 100 AND reorder_level>=0);
+ALTER TABLE sale_items ADD CONSTRAINT sale_qty_positive CHECK(quantity>0);
+ALTER TABLE purchase_items ADD CONSTRAINT purchase_qty_positive CHECK(quantity>0);
+INSERT INTO permissions(module,action,code,description) VALUES ('expenses','manage','expenses.manage','Record and view expenses'),('payments','manage','payments.manage','Record party payments'),('purchases','return','purchases.return','Return goods to suppliers'),('inventory','transfer','inventory.transfer','Move goods between stores'),('imports','manage','imports.manage','Import products'),('backups','manage','backups.manage','Export full database backup');
+INSERT INTO role_permissions(role_id,permission_id) SELECT r.id,p.id FROM roles r CROSS JOIN permissions p WHERE r.name='admin' ON CONFLICT DO NOTHING;
+INSERT INTO role_permissions(role_id,permission_id) SELECT r.id,p.id FROM roles r CROSS JOIN permissions p WHERE r.name IN('accountant','manager') AND p.code IN('expenses.manage','payments.manage') ON CONFLICT DO NOTHING;
+INSERT INTO settings(key,value) VALUES('demo_mode','false'),('receipt_footer','"Thank you for shopping with us!"') ON CONFLICT DO NOTHING;
+UPDATE stores SET name='Kirana Store',state='Delhi',state_code='07' WHERE id=1;
+
+CREATE TABLE sale_tenders(id SERIAL PRIMARY KEY,sale_id INT REFERENCES sales(id),mode TEXT NOT NULL,amount NUMERIC(14,2) NOT NULL);

@@ -1,0 +1,12 @@
+const fs=require('fs');const path=require('path');const crypto=require('crypto');const root=path.resolve(__dirname,'../..');require('dotenv').config({path:path.join(root,'.env')});
+if(process.env.NODE_ENV==='production'&&(!process.env.JWT_ACCESS_SECRET||!process.env.JWT_REFRESH_SECRET||!process.env.CUSTOMER_JWT_SECRET||!process.env.SETUP_TOKEN))throw Error('Production requires JWT_ACCESS_SECRET, JWT_REFRESH_SECRET, CUSTOMER_JWT_SECRET and SETUP_TOKEN');
+const data=process.env.DATA_DIR?path.dirname(process.env.DATA_DIR):path.join(root,'data');fs.mkdirSync(data,{recursive:true});
+if(!process.env.JWT_ACCESS_SECRET||!process.env.JWT_REFRESH_SECRET){const p=path.join(data,'local-secrets.json');if(!fs.existsSync(p))fs.writeFileSync(p,JSON.stringify({access:crypto.randomBytes(48).toString('hex'),refresh:crypto.randomBytes(48).toString('hex'),customer:crypto.randomBytes(48).toString('hex')}),{mode:0o600});const s=JSON.parse(fs.readFileSync(p));process.env.JWT_ACCESS_SECRET=s.access;process.env.JWT_REFRESH_SECRET=s.refresh;process.env.CUSTOMER_JWT_SECRET=process.env.CUSTOMER_JWT_SECRET||s.customer;}
+const lockPath=path.join(data,'erp-'+path.basename(process.env.DATA_DIR||'db')+'.lock');
+let lockOwned=false;
+function acquireLock(){if(process.env.DB_MODE==='postgres')return;try{const fd=fs.openSync(lockPath,'wx',0o600);fs.writeFileSync(fd,String(process.pid));fs.closeSync(fd);lockOwned=true;}catch(e){if(e.code!=='EEXIST')throw e;const pid=Number(fs.readFileSync(lockPath,'utf8'));try{process.kill(pid,0);}catch(check){if(check.code==='ESRCH'){fs.unlinkSync(lockPath);return acquireLock();}throw check;}throw Error('Another Kirana ERP instance is using this database. Open the existing app.');}}
+function releaseLock(){if(lockOwned){try{fs.unlinkSync(lockPath);}catch{}lockOwned=false;}}
+if(require.main===module){acquireLock();process.on('exit',releaseLock);}
+const db=require('./config/db');const app=require('./app');
+async function start(){await db.init();const port=Number(process.env.PORT||4173);const host=process.env.HOST||'127.0.0.1';const legacy=require('./services/legacy-store-link')(port,host);const server=app.listen(port,host,()=>console.log(`Kirana ERP: http://${host}:${port} · shop: /store`));server.on('error',async e=>{console.error(e.message);await db.close();process.exit(1);});for(const signal of ['SIGTERM','SIGINT'])process.on(signal,()=>{if(legacy)legacy.close();server.close(async()=>{await db.close();process.exit(0);});});}
+if(require.main===module)start().catch(e=>{console.error(e);process.exit(1);});module.exports={start};
