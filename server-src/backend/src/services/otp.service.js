@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
-const { query } = require('../config/db');
+const { query, memory } = require('../config/db');
 const ApiError = require('../utils/ApiError');
 const notificationService = require('./notification.service');
 
@@ -34,7 +34,10 @@ async function requestOtp({ mobile, purpose = 'storefront_login', shopName = 'th
     partyType: 'customer_otp',
   });
 
-  if(delivery.status==='failed')throw new ApiError(502,'SMS provider is not configured or could not deliver the OTP');
+  if(delivery.status==='failed'){
+    if(memory) return { expiresInMinutes: OTP_TTL_MINUTES, demoOtp: otp, demo: true };
+    throw new ApiError(502,'SMS provider is not configured or could not deliver the OTP');
+  }
   return { expiresInMinutes: OTP_TTL_MINUTES };
 }
 
