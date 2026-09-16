@@ -2,9 +2,9 @@ const express = require('express');
 const router = express.Router();
 const controller = require('../controllers/users.controller');
 const { authenticate } = require('../middleware/auth.middleware');
-const { requirePermission } = require('../middleware/rbac.middleware');
+const { requireSuperAdmin } = require('../middleware/rbac.middleware');
 
-router.use(authenticate, requirePermission('users.manage'));
+router.use(authenticate, requireSuperAdmin);
 
 router.get('/', controller.list);
 router.get('/:id', controller.getOne);
