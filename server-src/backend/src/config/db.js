@@ -38,10 +38,13 @@ async function init(){
  if(!exists){for(const file of ['schema.sql','seed.sql','002_communications_and_store_schema.sql','002_communications_and_store_seed.sql'])await exec(fs.readFileSync(path.join(root,'database',file),'utf8'));}
  if(memory) await exec(`CREATE TABLE IF NOT EXISTS auth_sessions(id TEXT PRIMARY KEY,user_id INT REFERENCES users(id),refresh_hash TEXT,expires_at TIMESTAMPTZ NOT NULL,created_at TIMESTAMPTZ DEFAULT now()); CREATE TABLE IF NOT EXISTS held_carts(id SERIAL PRIMARY KEY,store_id INT REFERENCES stores(id),name TEXT NOT NULL,cart JSONB NOT NULL,created_by INT REFERENCES users(id),created_at TIMESTAMPTZ DEFAULT now()); CREATE TABLE IF NOT EXISTS sale_tenders(id SERIAL PRIMARY KEY,sale_id INT REFERENCES sales(id),mode TEXT NOT NULL,amount NUMERIC(14,2) NOT NULL); UPDATE settings SET value='true' WHERE key='online_store_enabled'; UPDATE settings SET value='true' WHERE key='online_store_auto_list';`);
  await exec('CREATE TABLE IF NOT EXISTS app_migrations (name TEXT PRIMARY KEY, applied_at TIMESTAMPTZ DEFAULT now())');
- const migrations=memory?['005_customer_accounts.sql','006_online_payments_alerts.sql','007_super_admin_only.sql']:['003_operations.sql','004_bulk.sql','005_customer_accounts.sql','006_online_payments_alerts.sql','007_super_admin_only.sql'];
+ const migrations=memory?['005_customer_accounts.sql','006_online_payments_alerts.sql']:['003_operations.sql','004_bulk.sql','005_customer_accounts.sql','006_online_payments_alerts.sql'];
  for(const file of migrations)if(!(await query('SELECT name FROM app_migrations WHERE name=$1',[file])).rows.length){await withTransaction(async c=>{const sql=sanitizeSql(fs.readFileSync(path.join(root,'database',file),'utf8')); if(embedded){ // execute a multi-statement migration on the transaction connection
  await c.exec(sql);
  }else if(memory) await exec(sql); else await c.query(sql);await c.query('INSERT INTO app_migrations(name) VALUES($1)',[file]);});}
+ // Account administration is an owner-only capability. Apply this inline so
+ // hosted builds do not depend on an extra migration file being packaged.
+ await exec(`DELETE FROM role_permissions WHERE role_id IN (SELECT id FROM roles WHERE name <> 'super_admin') AND permission_id IN (SELECT id FROM permissions WHERE code IN ('users.manage','settings.manage')); UPDATE roles SET description='Store administration (owner-only security controls)' WHERE name='admin';`);
 }
 async function close(){return embedded?engine.close():engine.end();}
 async function dump(){if(!embedded)throw new Error('Use pg_dump for server PostgreSQL');return Buffer.from(await (await engine.dumpDataDir()).arrayBuffer());}
