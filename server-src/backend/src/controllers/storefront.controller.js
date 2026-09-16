@@ -78,7 +78,7 @@ const requestOtp = asyncHandler(async (req, res) => {
   const { mobile } = req.body;
   const shopName = await getSetting('online_store_name', 'the store');
   const result = await otpService.requestOtp({ mobile, shopName });
-  res.json({ success: true, message: 'OTP sent', ...result });
+  res.json({ success: true, message: 'OTP sent', data: result });
 });
 
 const verifyOtp = asyncHandler(async (req, res) => {
