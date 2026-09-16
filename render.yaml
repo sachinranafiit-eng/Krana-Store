@@ -16,6 +16,8 @@ services:
         value: "Admin@123"
       - key: TRUST_PROXY
         value: "1"
+      - key: CORS_ORIGIN
+        value: https://sachinranafiit-eng.github.io
       - key: JWT_ACCESS_SECRET
         generateValue: true
       - key: JWT_REFRESH_SECRET
