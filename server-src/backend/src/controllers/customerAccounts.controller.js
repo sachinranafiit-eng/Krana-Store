@@ -20,7 +20,7 @@ exports.register=ah(async(req,res)=>{
  const hash=await bcrypt.hash(b.password,12);
  const result=await db.withTransaction(async c=>{
  // A phone number supplied without verification must never identify an existing customer.
- await c.query('LOCK TABLE customer_accounts IN SHARE ROW EXCLUSIVE MODE');
+ if (!db.memory) await c.query('LOCK TABLE customer_accounts IN SHARE ROW EXCLUSIVE MODE');
  if((await c.query('SELECT id FROM customer_accounts WHERE username=$1',[u])).rows.length)throw E.conflict('That username is already taken. Choose another username or sign in.');
  const customer=(await c.query('INSERT INTO customers(name,mobile,is_online_registered,online_last_login_at,opt_in_marketing) VALUES($1,$2,true,now(),false) RETURNING id,name,mobile',[b.name.trim(),b.mobile])).rows[0];
  const account=(await c.query('INSERT INTO customer_accounts(customer_id,username,password_hash) VALUES($1,$2,$3) RETURNING id,username',[customer.id,u,hash])).rows[0];
