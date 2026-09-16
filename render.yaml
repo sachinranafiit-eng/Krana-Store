@@ -7,7 +7,13 @@ services:
     healthCheckPath: /health
     envVars:
       - key: DB_MODE
-        value: pglite
+        value: pgmem
+      - key: AUTO_SEED_ADMIN
+        value: "1"
+      - key: SEED_ADMIN_USERNAME
+        value: admin
+      - key: SEED_ADMIN_PASSWORD
+        value: "Admin@123"
       - key: TRUST_PROXY
         value: "1"
       - key: JWT_ACCESS_SECRET
