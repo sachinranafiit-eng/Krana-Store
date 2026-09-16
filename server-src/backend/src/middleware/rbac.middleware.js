@@ -22,6 +22,17 @@ function requirePermission(...permissionCodes) {
   };
 }
 
+// User accounts, roles, permission matrices, and audit logs are owner-only.
+// Keeping this check separate from the permission matrix prevents an admin
+// role from granting itself additional access through users.manage.
+function requireSuperAdmin(req, res, next) {
+  if (!req.user) return next(ApiError.unauthorized());
+  if (req.user.role_name !== 'super_admin') {
+    return next(ApiError.forbidden('Only a super admin can manage users, roles, and audit logs'));
+  }
+  next();
+}
+
 /**
  * requirePin — for sensitive actions (invoice cancel, stock adjustment,
  * purchase approval). Expects `req.body.pin` and checks it against the
@@ -45,4 +56,4 @@ async function requirePin(req, res, next) {
   }
 }
 
-module.exports = { requirePermission, requirePin };
+module.exports = { requirePermission, requireSuperAdmin, requirePin };
