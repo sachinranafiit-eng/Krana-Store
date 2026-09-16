@@ -7,7 +7,7 @@
 
 INSERT INTO roles (name, description, is_system) VALUES
  ('super_admin', 'Full unrestricted access', true),
- ('admin', 'Full access, configurable', false),
+ ('admin', 'Store administration (owner-only security controls)', false),
  ('manager', 'Store operations management', false),
  ('accountant', 'Financial & GST reporting', false),
  ('cashier', 'POS billing only', false),
@@ -50,7 +50,7 @@ INSERT INTO permissions (module, action, code, description) VALUES
  ('settings','manage','settings.manage','Manage system settings');
 
 -- Role → Permission matrix
--- admin: everything
+-- admin: operational permissions; owner-only security controls are removed by migration 007
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id FROM roles r CROSS JOIN permissions p WHERE r.name = 'admin';
 
