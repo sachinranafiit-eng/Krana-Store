@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { query, withTransaction } = require('../config/db');
+const { query, withTransaction, memory } = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const otpService = require('../services/otp.service');
@@ -30,8 +30,17 @@ const listCatalog = asyncHandler(async (req, res) => {
   const offset = (Math.max(Number(page), 1) - 1) * limit;
   params.push(limit, offset);
 
-  const { rows } = await query(
-    `SELECT p.id, p.name, p.local_name, p.online_description, p.online_images, p.sale_price,
+  const catalogSql = memory
+    ? `SELECT p.id, p.name, p.local_name, p.online_description, p.online_images, p.sale_price,
+            p.tax_inclusive, p.category_id, p.mrp, p.unit_id, u.short_code AS unit, p.gst_rate, c.name AS category_name,
+            0 AS available_qty
+     FROM products p
+     LEFT JOIN units u ON u.id = p.unit_id
+     LEFT JOIN categories c ON c.id = p.category_id
+     WHERE ${conditions.join(' AND ')}
+     ORDER BY p.name
+     LIMIT $${idx} OFFSET $${idx + 1}`
+    : `SELECT p.id, p.name, p.local_name, p.online_description, p.online_images, p.sale_price,
             p.tax_inclusive, p.category_id, p.mrp, p.unit_id, u.short_code AS unit, p.gst_rate, c.name AS category_name,
             COALESCE((SELECT SUM(s.current_qty) FROM stock s LEFT JOIN product_batches b ON b.id=s.batch_id WHERE (b.expiry_date IS NULL OR b.expiry_date>=CURRENT_DATE) AND s.product_id = p.id AND s.store_id=(SELECT id FROM stores WHERE is_active=true ORDER BY id LIMIT 1)), 0) AS available_qty
      FROM products p
@@ -39,22 +48,25 @@ const listCatalog = asyncHandler(async (req, res) => {
      LEFT JOIN categories c ON c.id = p.category_id
      WHERE ${conditions.join(' AND ')}
      ORDER BY p.name
-     LIMIT $${idx} OFFSET $${idx + 1}`,
-    params
-  );
+     LIMIT $${idx} OFFSET $${idx + 1}`;
+  const { rows } = await query(catalogSql, params);
   res.json({ success: true, data: rows, page: Number(page), pageSize: limit });
 });
 
 const getCatalogItem = asyncHandler(async (req, res) => {
  if(!await getSetting('online_store_enabled',false))throw ApiError.notFound('Online store is closed');
-  const { rows } = await query(
-    `SELECT p.id, p.name, p.local_name, p.online_description, p.online_images, p.sale_price,
+  const itemSql = memory
+    ? `SELECT p.id, p.name, p.local_name, p.online_description, p.online_images, p.sale_price,
+            p.tax_inclusive, p.category_id, p.mrp, p.unit_id, u.short_code AS unit, p.gst_rate,
+            0 AS available_qty
+     FROM products p LEFT JOIN units u ON u.id = p.unit_id
+     WHERE p.id = $1 AND p.is_online_visible = true AND p.is_active = true`
+    : `SELECT p.id, p.name, p.local_name, p.online_description, p.online_images, p.sale_price,
             p.tax_inclusive, p.category_id, p.mrp, p.unit_id, u.short_code AS unit, p.gst_rate,
             COALESCE((SELECT SUM(s.current_qty) FROM stock s LEFT JOIN product_batches b ON b.id=s.batch_id WHERE (b.expiry_date IS NULL OR b.expiry_date>=CURRENT_DATE) AND s.product_id = p.id AND s.store_id=(SELECT id FROM stores WHERE is_active=true ORDER BY id LIMIT 1)), 0) AS available_qty
      FROM products p LEFT JOIN units u ON u.id = p.unit_id
-     WHERE p.id = $1 AND p.is_online_visible = true AND p.is_active = true`,
-    [req.params.id]
-  );
+     WHERE p.id = $1 AND p.is_online_visible = true AND p.is_active = true`;
+  const { rows } = await query(itemSql, [req.params.id]);
   if (!rows[0]) throw ApiError.notFound('Product not found or not available online');
   res.json({ success: true, data: rows[0] });
 });

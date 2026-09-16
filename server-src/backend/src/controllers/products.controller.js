@@ -1,4 +1,4 @@
-const { query, withTransaction } = require('../config/db');
+const { query, withTransaction, memory } = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const { logAudit, logActivity } = require('../utils/audit');
@@ -81,7 +81,9 @@ const list = asyncHandler(async (req, res) => {
   `;
   params.push(limit, offset);
 
-  const { rows } = await query(sql, params);
+  const { rows } = memory
+    ? await query(`SELECT p.*, c.name AS category_name, b.name AS brand_name, u.short_code AS unit_code, 0 AS total_stock, NULL AS barcodes FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id LEFT JOIN units u ON u.id=p.unit_id ${where} ORDER BY p.name LIMIT $${idx} OFFSET $${idx+1}`, params)
+    : await query(sql, params);
   const masked = rows.map((r) => maskPricing(r, req.user));
   res.json({ success: true, data: masked, page: Number(page), pageSize: limit });
 });
