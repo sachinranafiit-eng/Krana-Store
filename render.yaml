@@ -3,15 +3,11 @@ services:
     name: kirana-erp
     runtime: docker
     region: singapore
-    plan: starter
+    plan: free
     healthCheckPath: /health
     envVars:
       - key: DB_MODE
-        value: postgres
-      - key: DATABASE_URL
-        fromDatabase:
-          name: kirana-erp-db
-          property: connectionString
+        value: pglite
       - key: TRUST_PROXY
         value: "1"
       - key: JWT_ACCESS_SECRET
@@ -26,10 +22,3 @@ services:
         value: production
       - key: HOST
         value: 0.0.0.0
-databases:
-  - name: kirana-erp-db
-    plan: 0.1c-256mb
-    region: singapore
-    diskSizeGB: 5
-    postgresMajorVersion: "15"
-    ipAllowList: []
