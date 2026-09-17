@@ -100,8 +100,8 @@ const getSettings = asyncHandler(async (req, res) => {
     `SELECT key, value FROM settings WHERE key = ANY($1)`,
     [STORE_SETTING_KEYS]
   );
-  const settings = {};
-  rows.forEach((r) => { settings[r.key] = r.value; });
+  const settings = { online_store_enabled: true, online_store_name: 'Kirana & Co.', online_store_banner_text: 'Your neighbourhood essentials, a tap away.', online_store_delivery_charge: 0, online_store_min_order_amount: 0, online_store_pincodes: '', online_store_delivery_eta: 'Delivery time confirmed by store', online_store_auto_list: true };
+  rows.forEach((r) => { let value = r.value; if (typeof value === 'string') { try { value = JSON.parse(value); } catch {} } settings[r.key] = value; });
   res.json({ success: true, data: {...settings,paymentGateway:{provider:'razorpay',configured:Boolean(process.env.RAZORPAY_KEY_ID&&process.env.RAZORPAY_KEY_SECRET)},notifications:{whatsapp:Boolean(process.env.WHATSAPP_ACCESS_TOKEN&&process.env.WHATSAPP_PHONE_NUMBER_ID),sms:Boolean(process.env.MSG91_AUTH_KEY&&process.env.MSG91_SENDER_ID)}} });
 });
 
