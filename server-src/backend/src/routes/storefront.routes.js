@@ -7,6 +7,7 @@ const { authenticateCustomer } = require('../middleware/customerAuth.middleware'
 router.use('/auth',require('express-rate-limit')({windowMs:15*60*1000,limit:15,standardHeaders:true,legacyHeaders:false}));
 // --- Public: catalog browsing & OTP login (no auth) ---
 router.get('/config', require('../controllers/shop.controller').config);
+router.get('/debug/schema', controller.schemaDiagnostics);
 router.post('/quote',require('express-rate-limit')({windowMs:60000,limit:120}), require('../controllers/shop.controller').quote);
 router.get('/products', controller.listCatalog);
 router.get('/products/:id', controller.getCatalogItem);
