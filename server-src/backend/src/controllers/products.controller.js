@@ -81,9 +81,33 @@ const list = asyncHandler(async (req, res) => {
   `;
   params.push(limit, offset);
 
-  const { rows } = memory
-    ? await query(`SELECT p.*, c.name AS category_name, b.name AS brand_name, u.short_code AS unit_code, 0 AS total_stock, NULL AS barcodes FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id LEFT JOIN units u ON u.id=p.unit_id ${where} ORDER BY p.name LIMIT $${idx} OFFSET $${idx+1}`, params)
-    : await query(sql, params);
+  let rows;
+  if (memory) {
+    // pg-mem cannot resolve correlated aliases in the production query. Read
+    // the product list first, then attach the same stock/barcode aggregates.
+    const memoryConditions = [];
+    const memoryParams = [];
+    let memoryIdx = 1;
+    if (search) { memoryConditions.push(`(p.name ILIKE $${memoryIdx} OR p.sku ILIKE $${memoryIdx})`); memoryParams.push(`%${search}%`); memoryIdx++; }
+    if (categoryId) { memoryConditions.push(`p.category_id = $${memoryIdx}`); memoryParams.push(categoryId); memoryIdx++; }
+    if (brandId) { memoryConditions.push(`p.brand_id = $${memoryIdx}`); memoryParams.push(brandId); memoryIdx++; }
+    if (isActive !== undefined) { memoryConditions.push(`p.is_active = $${memoryIdx}`); memoryParams.push(isActive === 'true'); memoryIdx++; }
+    const memoryWhere = memoryConditions.length ? `WHERE ${memoryConditions.join(' AND ')}` : '';
+    memoryParams.push(limit, offset);
+    const base = await query(`SELECT p.*, c.name AS category_name, b.name AS brand_name, u.short_code AS unit_code
+      FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id
+      LEFT JOIN units u ON u.id=p.unit_id ${memoryWhere} ORDER BY p.name LIMIT $${memoryIdx} OFFSET $${memoryIdx+1}`, memoryParams);
+    rows = base.rows;
+    const ids = rows.map((r) => r.id);
+    if (ids.length) {
+      const stocks = (await query('SELECT product_id,SUM(current_qty) AS total_stock FROM stock WHERE store_id=$1 AND product_id IN (' + ids.map((_, i) => '$' + (i + 2)).join(',') + ') GROUP BY product_id', [Number(req.user.store_id) || 1, ...ids])).rows;
+      const bars = (await query('SELECT product_id,barcode FROM product_barcodes WHERE product_id IN (' + ids.map((_, i) => '$' + (i + 1)).join(',') + ')', ids)).rows;
+      const stockById = Object.fromEntries(stocks.map((r) => [r.product_id, r.total_stock]));
+      const barsById = {};
+      for (const b of bars) (barsById[b.product_id] ||= []).push(b.barcode);
+      rows = rows.map((r) => ({ ...r, total_stock: stockById[r.id] || 0, barcodes: barsById[r.id] || null }));
+    } else rows = [];
+  } else rows = (await query(sql, params)).rows;
   const masked = rows.map((r) => maskPricing(r, req.user));
   res.json({ success: true, data: masked, page: Number(page), pageSize: limit });
 });
