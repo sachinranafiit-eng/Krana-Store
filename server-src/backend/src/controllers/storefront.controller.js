@@ -241,7 +241,7 @@ const placeOrder = asyncHandler(async(req,res)=>{
   const min=Number(await getSetting('online_store_min_order_amount',0));
   const order=await withTransaction(async c=>{
     const cart=(await c.query('SELECT * FROM carts WHERE customer_id=$1 FOR UPDATE',[req.customer.id])).rows[0];if(!cart)throw ApiError.badRequest('Cart is empty');
-    const items=(await c.query('SELECT ci.*,p.name,p.sale_price,p.gst_rate,p.tax_inclusive,p.is_active,p.is_online_visible FROM cart_items ci JOIN products p ON p.id=ci.product_id WHERE ci.cart_id=$1 ORDER BY p.id FOR UPDATE OF ci,p',[cart.id])).rows;
+    const items=(await c.query('SELECT ci.*,p.name,p.sale_price,p.gst_rate,p.tax_inclusive,p.is_active,p.is_online_visible FROM cart_items ci JOIN products p ON p.id=ci.product_id WHERE ci.cart_id=$1 ORDER BY p.id',[cart.id])).rows;
     if(!items.length)throw ApiError.badRequest('Cart is empty');const lines=items.map(i=>{if(!i.is_active||!i.is_online_visible)throw ApiError.badRequest('An item is no longer available');return {...i,...op.line(i.quantity,i.sale_price,i.gst_rate,i.tax_inclusive)};});
     const total=op.money(op.sum(lines,'total_amount')+charge);if(op.sum(lines,'total_amount')<min)throw ApiError.badRequest('Minimum order is Rs.'+min);
     const store=(await c.query('SELECT id FROM stores WHERE is_active=true ORDER BY id LIMIT 1')).rows[0];if(!store)throw ApiError.badRequest('Store unavailable');
