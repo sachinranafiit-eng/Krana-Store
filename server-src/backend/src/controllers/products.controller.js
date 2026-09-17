@@ -247,13 +247,14 @@ const update = asyncHandler(async (req, res) => {
        sale_price = COALESCE($11,sale_price), wholesale_price = COALESCE($12,wholesale_price),
        min_selling_price = COALESCE($13,min_selling_price), reorder_level = COALESCE($14,reorder_level),
        min_stock_level = COALESCE($15,min_stock_level), max_stock_level = COALESCE($16,max_stock_level),
-       rack_location = COALESCE($17,rack_location), is_active = COALESCE($18,is_active)
-     WHERE id = $19 RETURNING *`,
+       rack_location = COALESCE($17,rack_location), image_url = COALESCE($18,image_url),
+       is_active = COALESCE($19,is_active)
+     WHERE id = $20 RETURNING *`,
     [
       b.name, b.localName, b.description, b.categoryId, brandId, b.supplierId,
       b.hsnCode, b.gstRate, b.costPrice, b.mrp, b.salePrice, b.wholesalePrice,
       b.minSellingPrice, b.reorderLevel, b.minStockLevel, b.maxStockLevel,
-      b.rackLocation, b.isActive, id,
+      b.rackLocation, b.imageUrl, b.isActive, id,
     ]
   );
 
