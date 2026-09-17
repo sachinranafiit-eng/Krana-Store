@@ -20,7 +20,7 @@ async function movement(c,u,p,qty,type,ref,id,batch=null,store=u.store_id||1,not
   const stockSql=memory
    ? (batch==null?'SELECT * FROM stock WHERE store_id=$1 AND product_id=$2 AND batch_id IS NULL FOR UPDATE':'SELECT * FROM stock WHERE store_id=$1 AND product_id=$2 AND batch_id=$3 FOR UPDATE')
    : 'SELECT * FROM stock WHERE store_id=$1 AND product_id=$2 AND batch_id IS NOT DISTINCT FROM $3 FOR UPDATE';
-  const stock=(await c.query(stockSql,batch==null?[store,p]:[store,p,batch])).rows[0];
+  const stock=(await c.query(stockSql,memory ? (batch==null?[store,p]:[store,p,batch]) : [store,p,batch])).rows[0];
   if(!stock||Number(stock.current_qty)<-qty)throw E.conflict('Insufficient stock. Refresh the stock balance.');
  }
  await c.query('INSERT INTO stock_movements(store_id,product_id,batch_id,movement_type,qty_in,qty_out,reference_type,reference_id,created_by,notes) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',[store,p,batch,type,qty>0?qty:0,qty<0?-qty:0,ref,String(id),u.id,notes]);
