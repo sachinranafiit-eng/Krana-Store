@@ -17,7 +17,8 @@
    "openingStock",
    "reorderLevel",
    "hsnCode",
-   "barcode"
+   "barcode",
+   "imageUrl"
   ],
   "example": {
    "sku": "RICE-1",
@@ -30,9 +31,10 @@
    "gstRate": 5,
    "openingStock": 50,
    "reorderLevel": 10,
-   "hsnCode": "1006"
+   "hsnCode": "1006",
+   "imageUrl": "https://example.com/product-photo.jpg"
   },
-  "help": "Creates new products. SKU must be unique. Unit codes are matched case-insensitively; missing unit codes are added automatically. Opening stock is added to the current store. Prices include GST; cost excludes GST."
+  "help": "Creates new products. SKU must be unique. Unit codes are matched case-insensitively; missing unit codes are added automatically. Opening stock is added to the current store. Prices include GST; cost excludes GST. imageUrl is an optional HTTPS product or brand photo URL shown in the online store."
  },
  "stock": {
   "label": "Stock entries",
