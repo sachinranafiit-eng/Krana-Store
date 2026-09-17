@@ -157,10 +157,25 @@ const getCart = asyncHandler(async (req, res) => {
 });
 
 async function ensureCart(customerId) {
-  const existing = await query('SELECT * FROM carts WHERE customer_id = $1', [customerId]);
+  return getOrCreateCart({ query }, customerId);
+}
+
+// Some older hosted databases have the carts table without the UNIQUE
+// constraint used by ON CONFLICT(customer_id). Avoid relying on that
+// constraint so checkout works across upgraded databases as well.
+async function getOrCreateCart(client, customerId) {
+  const existing = await client.query('SELECT * FROM carts WHERE customer_id = $1', [customerId]);
   if (existing.rows[0]) return existing.rows[0];
-  const created = await query('INSERT INTO carts (customer_id) VALUES ($1) ON CONFLICT(customer_id) DO UPDATE SET updated_at=now() RETURNING *', [customerId]);
-  return created.rows[0];
+  try {
+    const created = await client.query('INSERT INTO carts (customer_id) VALUES ($1) RETURNING *', [customerId]);
+    return created.rows[0];
+  } catch (err) {
+    if (err.code === '23505') {
+      const retry = await client.query('SELECT * FROM carts WHERE customer_id = $1', [customerId]);
+      if (retry.rows[0]) return retry.rows[0];
+    }
+    throw err;
+  }
 }
 
 const addToCart = asyncHandler(async (req, res) => {
