@@ -41,7 +41,7 @@ async function init(){
  // The hosted demo uses pg-mem and intentionally skips the PostgreSQL-only
  // operations migration. The bulk import table itself is pg-mem compatible,
  // so it must still be applied or every import commit fails before validation.
- const migrations=memory?['004_bulk.sql','005_customer_accounts.sql','006_online_payments_alerts.sql','007_online_store_repair.sql','008_online_alert_repair.sql']:['003_operations.sql','004_bulk.sql','005_customer_accounts.sql','006_online_payments_alerts.sql','007_online_store_repair.sql','008_online_alert_repair.sql'];
+ const migrations=memory?['004_bulk.sql','005_customer_accounts.sql','006_online_payments_alerts.sql']:['003_operations.sql','004_bulk.sql','005_customer_accounts.sql','006_online_payments_alerts.sql','007_online_store_repair.sql','008_online_alert_repair.sql'];
  for(const file of migrations)if(!(await query('SELECT name FROM app_migrations WHERE name=$1',[file])).rows.length){await withTransaction(async c=>{const sql=sanitizeSql(fs.readFileSync(path.join(root,'database',file),'utf8')); if(embedded){ // execute a multi-statement migration on the transaction connection
  await c.exec(sql);
  }else if(memory) await exec(sql); else await c.query(sql);await c.query('INSERT INTO app_migrations(name) VALUES($1)',[file]);});}
