@@ -124,6 +124,7 @@ const updateSettings = asyncHandler(async (req, res) => {
     );
   }
   if (updates.online_store_auto_list === true) await query('UPDATE products SET is_online_visible = true');
+  if (typeof updates.online_store_name === 'string' && updates.online_store_name.trim()) await query('UPDATE stores SET name=$1 WHERE id=(SELECT id FROM stores WHERE is_active=true ORDER BY id LIMIT 1)', [updates.online_store_name.trim()]);
   await logActivity({ userId: req.user.id, action: 'online_store.settings_updated', details: updates });
   res.json({ success: true, message: 'Settings updated' });
 });
