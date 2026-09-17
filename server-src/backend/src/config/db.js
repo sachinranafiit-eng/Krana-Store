@@ -38,7 +38,10 @@ async function init(){
  if(!exists){for(const file of ['schema.sql','seed.sql','002_communications_and_store_schema.sql','002_communications_and_store_seed.sql'])await exec(fs.readFileSync(path.join(root,'database',file),'utf8'));}
  if(memory) await exec(`CREATE TABLE IF NOT EXISTS auth_sessions(id TEXT PRIMARY KEY,user_id INT REFERENCES users(id),refresh_hash TEXT,expires_at TIMESTAMPTZ NOT NULL,created_at TIMESTAMPTZ DEFAULT now()); CREATE TABLE IF NOT EXISTS held_carts(id SERIAL PRIMARY KEY,store_id INT REFERENCES stores(id),name TEXT NOT NULL,cart JSONB NOT NULL,created_by INT REFERENCES users(id),created_at TIMESTAMPTZ DEFAULT now()); CREATE TABLE IF NOT EXISTS sale_tenders(id SERIAL PRIMARY KEY,sale_id INT REFERENCES sales(id),mode TEXT NOT NULL,amount NUMERIC(14,2) NOT NULL); UPDATE settings SET value='true' WHERE key='online_store_enabled'; UPDATE settings SET value='true' WHERE key='online_store_auto_list';`);
  await exec('CREATE TABLE IF NOT EXISTS app_migrations (name TEXT PRIMARY KEY, applied_at TIMESTAMPTZ DEFAULT now())');
- const migrations=memory?['005_customer_accounts.sql','006_online_payments_alerts.sql']:['003_operations.sql','004_bulk.sql','005_customer_accounts.sql','006_online_payments_alerts.sql'];
+ // The hosted demo uses pg-mem and intentionally skips the PostgreSQL-only
+ // operations migration. The bulk import table itself is pg-mem compatible,
+ // so it must still be applied or every import commit fails before validation.
+ const migrations=memory?['004_bulk.sql','005_customer_accounts.sql','006_online_payments_alerts.sql']:['003_operations.sql','004_bulk.sql','005_customer_accounts.sql','006_online_payments_alerts.sql'];
  for(const file of migrations)if(!(await query('SELECT name FROM app_migrations WHERE name=$1',[file])).rows.length){await withTransaction(async c=>{const sql=sanitizeSql(fs.readFileSync(path.join(root,'database',file),'utf8')); if(embedded){ // execute a multi-statement migration on the transaction connection
  await c.exec(sql);
  }else if(memory) await exec(sql); else await c.query(sql);await c.query('INSERT INTO app_migrations(name) VALUES($1)',[file]);});}
