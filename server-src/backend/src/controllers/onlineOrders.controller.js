@@ -123,6 +123,7 @@ const updateSettings = asyncHandler(async (req, res) => {
       [key, JSON.stringify(updates[key]), req.user.id]
     );
   }
+  if (updates.online_store_auto_list === true) await query('UPDATE products SET is_online_visible = true');
   await logActivity({ userId: req.user.id, action: 'online_store.settings_updated', details: updates });
   res.json({ success: true, message: 'Settings updated' });
 });
