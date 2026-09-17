@@ -1,5 +1,5 @@
 const D=require('decimal.js');
-const {withTransaction}=require('../config/db');
+const {withTransaction,memory}=require('../config/db');
 const E=require('../utils/ApiError');
 const can=(u,p)=>u.role_name==='super_admin'||u.permissions.includes(p);
 function number(x,name,min=0,max=1e9){if(x===null||x===''||!Number.isFinite(Number(x))||Number(x)<min||Number(x)>max)throw E.badRequest(`Invalid ${name}`);return Number(x);}
@@ -16,10 +16,28 @@ const sum=(a,k)=>money(a.reduce((s,x)=>s.plus(x[k]||0),new D(0)));
 async function audit(c,u,action,type,id,details={}){await c.query('INSERT INTO user_activity_logs(user_id,action,entity_type,entity_id,details) VALUES($1,$2,$3,$4,$5)',[u.id,action,type,String(id),JSON.stringify(details)]);await c.query('INSERT INTO audit_logs(user_id,table_name,record_id,operation,new_data) VALUES($1,$2,$3,$4,$5)',[u.id,type,String(id),'INSERT',JSON.stringify(details)]);}
 async function context(c,u,date){const store=(await c.query('SELECT * FROM stores WHERE id=$1 AND is_active=true',[u.store_id||1])).rows[0];if(!store)throw E.badRequest('Active store required');const fy=(await c.query('SELECT id FROM financial_years WHERE $1::date BETWEEN start_date AND end_date AND is_closed=false',[date||new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'})])).rows[0];if(!fy)throw E.badRequest('No open financial year for this date');return {store,fy};}
 async function movement(c,u,p,qty,type,ref,id,batch=null,store=u.store_id||1,notes=null){
- if(qty<0){const stock=(await c.query('SELECT * FROM stock WHERE store_id=$1 AND product_id=$2 AND batch_id IS NOT DISTINCT FROM $3 FOR UPDATE',[store,p,batch])).rows[0];if(!stock||Number(stock.current_qty)<-qty)throw E.conflict('Insufficient stock. Refresh the stock balance.');}
+ if(qty<0){
+  const stockSql=memory
+   ? (batch==null?'SELECT * FROM stock WHERE store_id=$1 AND product_id=$2 AND batch_id IS NULL FOR UPDATE':'SELECT * FROM stock WHERE store_id=$1 AND product_id=$2 AND batch_id=$3 FOR UPDATE')
+   : 'SELECT * FROM stock WHERE store_id=$1 AND product_id=$2 AND batch_id IS NOT DISTINCT FROM $3 FOR UPDATE';
+  const stock=(await c.query(stockSql,batch==null?[store,p]:[store,p,batch])).rows[0];
+  if(!stock||Number(stock.current_qty)<-qty)throw E.conflict('Insufficient stock. Refresh the stock balance.');
+ }
  await c.query('INSERT INTO stock_movements(store_id,product_id,batch_id,movement_type,qty_in,qty_out,reference_type,reference_id,created_by,notes) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',[store,p,batch,type,qty>0?qty:0,qty<0?-qty:0,ref,String(id),u.id,notes]);
+ // PostgreSQL applies this balance through the stock_from_ledger trigger from
+ // 003_operations.sql. The hosted pg-mem runtime intentionally skips that
+ // PostgreSQL-only trigger, so keep its stock aggregate in sync explicitly.
+ if(memory){
+  const stockSql=batch==null?'SELECT id FROM stock WHERE store_id=$1 AND product_id=$2 AND batch_id IS NULL FOR UPDATE':'SELECT id FROM stock WHERE store_id=$1 AND product_id=$2 AND batch_id=$3 FOR UPDATE';
+  const existing=(await c.query(stockSql,batch==null?[store,p]:[store,p,batch])).rows[0];
+  if(existing) await c.query('UPDATE stock SET current_qty=current_qty+$1,updated_at=now() WHERE id=$2',[qty,existing.id]);
+  else await c.query('INSERT INTO stock(store_id,product_id,batch_id,current_qty) VALUES($1,$2,$3,$4)',[store,p,batch,qty]);
+ }
 }
-async function consume(c,u,p,quantity,type,ref,id){let left=quantity;const stocks=(await c.query('SELECT s.*,b.expiry_date FROM stock s LEFT JOIN product_batches b ON b.id=s.batch_id WHERE s.store_id=$1 AND s.product_id=$2 AND s.current_qty>0 AND (b.expiry_date IS NULL OR b.expiry_date>=CURRENT_DATE) ORDER BY b.expiry_date ASC NULLS LAST,s.id FOR UPDATE OF s',[u.store_id||1,p])).rows; if(stocks.reduce((s,x)=>s+Number(x.current_qty),0)<left)throw E.conflict('Insufficient unexpired stock');const allocations=[];for(const s of stocks){const take=Math.min(left,Number(s.current_qty));if(take<=0)break;await movement(c,u,p,-take,type,ref,id,s.batch_id);allocations.push({batch:s.batch_id,quantity:take});left=Number(new D(left).minus(take));}return allocations;}
+async function consume(c,u,p,quantity,type,ref,id){let left=quantity;const stockSql=memory
+ ? 'SELECT s.*,b.expiry_date FROM stock s LEFT JOIN product_batches b ON b.id=s.batch_id WHERE s.store_id=$1 AND s.product_id=$2 AND s.current_qty>0 ORDER BY s.id'
+ : 'SELECT s.*,b.expiry_date FROM stock s LEFT JOIN product_batches b ON b.id=s.batch_id WHERE s.store_id=$1 AND s.product_id=$2 AND s.current_qty>0 AND (b.expiry_date IS NULL OR b.expiry_date>=CURRENT_DATE) ORDER BY b.expiry_date ASC NULLS LAST,s.id FOR UPDATE OF s';
+ const stocks=(await c.query(stockSql,[u.store_id||1,p])).rows; if(stocks.reduce((s,x)=>s+Number(x.current_qty),0)<left)throw E.conflict('Insufficient unexpired stock');const allocations=[];for(const s of stocks){const take=Math.min(left,Number(s.current_qty));if(take<=0)break;await movement(c,u,p,-take,type,ref,id,s.batch_id);allocations.push({batch:s.batch_id,quantity:take});left=Number(new D(left).minus(take));}return allocations;}
 async function balance(c,type,id){
  const customer=type==='customer'; const party=(await c.query(`SELECT * FROM ${customer?'customers':'suppliers'} WHERE id=$1 FOR UPDATE`,[id])).rows[0];if(!party)throw E.notFound('Party not found');
  const invoices=(await c.query(customer?"SELECT COALESCE(SUM(total_amount),0) v FROM sales WHERE customer_id=$1 AND status='completed' AND invoice_type NOT IN('quotation','estimate')":"SELECT COALESCE(SUM(total_amount),0) v FROM purchases WHERE supplier_id=$1",[id])).rows[0].v;
