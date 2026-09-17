@@ -12,15 +12,6 @@ async function getSetting(key, fallback = null) {
   return rows[0] ? rows[0].value : fallback;
 }
 
-// Temporary operational diagnostics for the hosted storefront. This only reports
-// table/column presence and is safe to call without customer data.
-const schemaDiagnostics = asyncHandler(async (req, res) => {
-  const tables = ['carts','cart_items','online_orders','online_order_items','order_status_history','store_alerts','stock','stock_movements'];
-  const tableRows = (await query('SELECT table_name FROM information_schema.tables WHERE table_schema=\'public\' AND table_name = ANY($1)', [tables])).rows;
-  const columns = (await query("SELECT table_name,column_name FROM information_schema.columns WHERE table_schema='public' AND table_name = ANY($1) AND table_name IN ('online_orders','store_alerts') ORDER BY table_name,column_name", [tables])).rows;
-  res.json({ success: true, data: { memory, tables: tableRows.map(r => r.table_name), columns } });
-});
-
 // ---------------------------------------------------------------------
 // CATALOG (public, no auth)
 // ---------------------------------------------------------------------
@@ -304,7 +295,7 @@ const myOrderDetail = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
-  listCatalog, getCatalogItem, schemaDiagnostics, requestOtp, verifyOtp,
+  listCatalog, getCatalogItem, requestOtp, verifyOtp,
   getCart, addToCart, updateCartItem, removeCartItem,
   placeOrder, createPaymentOrder, myOrders, myOrderDetail,
 };
