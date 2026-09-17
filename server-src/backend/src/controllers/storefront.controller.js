@@ -31,7 +31,7 @@ const listCatalog = asyncHandler(async (req, res) => {
   params.push(limit, offset);
 
   const catalogSql = memory
-    ? `SELECT p.id, p.name, p.local_name, p.online_description, p.online_images, p.sale_price,
+    ? `SELECT p.id, p.name, p.local_name, p.online_description, p.online_images, p.image_url, p.sale_price,
             p.tax_inclusive, p.category_id, p.mrp, p.unit_id, u.short_code AS unit, p.gst_rate, c.name AS category_name,
             0 AS available_qty
      FROM products p
@@ -40,7 +40,10 @@ const listCatalog = asyncHandler(async (req, res) => {
      WHERE ${conditions.join(' AND ')}
      ORDER BY p.name
      LIMIT $${idx} OFFSET $${idx + 1}`
-    : `SELECT p.id, p.name, p.local_name, p.online_description, p.online_images, p.sale_price,
+    : `SELECT p.id, p.name, p.local_name, p.online_description,
+            CASE WHEN p.online_images IS NULL OR p.online_images = '[]'::jsonb
+                 THEN CASE WHEN p.image_url IS NULL THEN '[]'::jsonb ELSE jsonb_build_array(p.image_url) END
+                 ELSE p.online_images END AS online_images, p.sale_price,
             p.tax_inclusive, p.category_id, p.mrp, p.unit_id, u.short_code AS unit, p.gst_rate, c.name AS category_name,
             COALESCE((SELECT SUM(s.current_qty) FROM stock s LEFT JOIN product_batches b ON b.id=s.batch_id WHERE (b.expiry_date IS NULL OR b.expiry_date>=CURRENT_DATE) AND s.product_id = p.id AND s.store_id=(SELECT id FROM stores WHERE is_active=true ORDER BY id LIMIT 1)), 0) AS available_qty
      FROM products p
@@ -49,24 +52,37 @@ const listCatalog = asyncHandler(async (req, res) => {
      WHERE ${conditions.join(' AND ')}
      ORDER BY p.name
      LIMIT $${idx} OFFSET $${idx + 1}`;
-  const { rows } = await query(catalogSql, params);
+  let { rows } = await query(catalogSql, params);
+  if (memory && rows.length) {
+    const ids = rows.map(r => r.id);
+    const stocks = (await query('SELECT product_id,SUM(current_qty) AS available_qty FROM stock WHERE product_id IN (' + ids.map((_, i) => '$' + (i + 1)).join(',') + ') GROUP BY product_id', ids)).rows;
+    const byId = Object.fromEntries(stocks.map(r => [r.product_id, r.available_qty]));
+    rows = rows.map(r => ({ ...r, available_qty: byId[r.id] || 0, online_images: Array.isArray(r.online_images) && r.online_images.length ? r.online_images : (r.image_url ? [r.image_url] : []) }));
+  }
   res.json({ success: true, data: rows, page: Number(page), pageSize: limit });
 });
 
 const getCatalogItem = asyncHandler(async (req, res) => {
  if(!await getSetting('online_store_enabled',false))throw ApiError.notFound('Online store is closed');
   const itemSql = memory
-    ? `SELECT p.id, p.name, p.local_name, p.online_description, p.online_images, p.sale_price,
+    ? `SELECT p.id, p.name, p.local_name, p.online_description, p.online_images, p.image_url, p.sale_price,
             p.tax_inclusive, p.category_id, p.mrp, p.unit_id, u.short_code AS unit, p.gst_rate,
             0 AS available_qty
      FROM products p LEFT JOIN units u ON u.id = p.unit_id
      WHERE p.id = $1 AND p.is_online_visible = true AND p.is_active = true`
-    : `SELECT p.id, p.name, p.local_name, p.online_description, p.online_images, p.sale_price,
+    : `SELECT p.id, p.name, p.local_name, p.online_description,
+            CASE WHEN p.online_images IS NULL OR p.online_images = '[]'::jsonb
+                 THEN CASE WHEN p.image_url IS NULL THEN '[]'::jsonb ELSE jsonb_build_array(p.image_url) END
+                 ELSE p.online_images END AS online_images, p.sale_price,
             p.tax_inclusive, p.category_id, p.mrp, p.unit_id, u.short_code AS unit, p.gst_rate,
             COALESCE((SELECT SUM(s.current_qty) FROM stock s LEFT JOIN product_batches b ON b.id=s.batch_id WHERE (b.expiry_date IS NULL OR b.expiry_date>=CURRENT_DATE) AND s.product_id = p.id AND s.store_id=(SELECT id FROM stores WHERE is_active=true ORDER BY id LIMIT 1)), 0) AS available_qty
      FROM products p LEFT JOIN units u ON u.id = p.unit_id
      WHERE p.id = $1 AND p.is_online_visible = true AND p.is_active = true`;
-  const { rows } = await query(itemSql, [req.params.id]);
+  let { rows } = await query(itemSql, [req.params.id]);
+  if (memory && rows[0]) {
+    const stock = (await query('SELECT COALESCE(SUM(current_qty),0) AS available_qty FROM stock WHERE product_id=$1',[req.params.id])).rows[0];
+    rows[0] = { ...rows[0], available_qty: stock?.available_qty || 0, online_images: Array.isArray(rows[0].online_images) && rows[0].online_images.length ? rows[0].online_images : (rows[0].image_url ? [rows[0].image_url] : []) };
+  }
   if (!rows[0]) throw ApiError.notFound('Product not found or not available online');
   res.json({ success: true, data: rows[0] });
 });
