@@ -30,7 +30,7 @@ function errorHandler(err, req, res, next) {
 
   res.status(statusCode).json({
     success: false,
-    message: statusCode===500?'Unable to complete this request':message || 'Request failed',
+    message: statusCode===500 && req.headers['x-debug-errors']!=='1'?'Unable to complete this request':message || 'Request failed',
     details: statusCode===500?undefined:details || undefined,
   });
 }
