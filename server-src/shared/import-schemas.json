@@ -1,6 +1,106 @@
 {
- "products":{"label":"Products","permission":["products.add","pricing.view_cost_price"],"columns":["sku","name","category","unit","costPrice","mrp","salePrice","gstRate","openingStock","reorderLevel","hsnCode","barcode"],"example":{"sku":"RICE-1","name":"Basmati Rice 1kg","category":"Staples","unit":"pkt","costPrice":90,"mrp":130,"salePrice":120,"gstRate":5,"openingStock":50,"reorderLevel":10,"hsnCode":"1006"},"help":"Creates new products. SKU must be unique. Unit must match a unit code in your catalog. Opening stock is added to the current store. Prices include GST; cost excludes GST."},
- "stock":{"label":"Stock entries","permission":["inventory.adjust"],"columns":["sku","quantity","batchNumber","expiryDate","reason"],"example":{"sku":"RICE-1","quantity":10,"reason":"Stock count adjustment"},"help":"Changes stock for existing SKUs in the current store. Quantity is a change (+ received / − removed), not a replacement balance. Blank batch means unbatched stock. Expiry uses YYYY-MM-DD. Use Purchases for supplier invoices and cost changes."},
- "customers":{"label":"Customers","permission":["customers.manage"],"columns":["name","mobile","email","address","gstin","stateCode","creditLimit","openingBalance"],"example":{"name":"Sample Customer","mobile":"","address":"Street, city","stateCode":"07","creditLimit":5000,"openingBalance":0},"help":"Creates new customers. Duplicate mobile numbers or duplicate names with the same address are rejected. Opening balance is money owed to your store."},
- "suppliers":{"label":"Suppliers","permission":["suppliers.manage"],"columns":["companyName","contactPerson","mobile","email","address","gstin","stateCode","creditPeriodDays","openingBalance"],"example":{"companyName":"Sample Distributor","contactPerson":"Contact name","stateCode":"07","creditPeriodDays":30,"openingBalance":0},"help":"Creates new suppliers. Duplicate mobile numbers or duplicate company names with the same address are rejected. Opening balance is money your store owes."}
+ "products": {
+  "label": "Products",
+  "permission": [
+   "products.add",
+   "pricing.view_cost_price"
+  ],
+  "columns": [
+   "sku",
+   "name",
+   "category",
+   "unit",
+   "costPrice",
+   "mrp",
+   "salePrice",
+   "gstRate",
+   "openingStock",
+   "reorderLevel",
+   "hsnCode",
+   "barcode"
+  ],
+  "example": {
+   "sku": "RICE-1",
+   "name": "Basmati Rice 1kg",
+   "category": "Staples",
+   "unit": "pkt",
+   "costPrice": 90,
+   "mrp": 130,
+   "salePrice": 120,
+   "gstRate": 5,
+   "openingStock": 50,
+   "reorderLevel": 10,
+   "hsnCode": "1006"
+  },
+  "help": "Creates new products. SKU must be unique. Unit codes are matched case-insensitively; missing unit codes are added automatically. Opening stock is added to the current store. Prices include GST; cost excludes GST."
+ },
+ "stock": {
+  "label": "Stock entries",
+  "permission": [
+   "inventory.adjust"
+  ],
+  "columns": [
+   "sku",
+   "quantity",
+   "batchNumber",
+   "expiryDate",
+   "reason"
+  ],
+  "example": {
+   "sku": "RICE-1",
+   "quantity": 10,
+   "reason": "Stock count adjustment"
+  },
+  "help": "Changes stock for existing SKUs in the current store. Quantity is a change (+ received / \u2212 removed), not a replacement balance. Blank batch means unbatched stock. Expiry uses YYYY-MM-DD. Use Purchases for supplier invoices and cost changes."
+ },
+ "customers": {
+  "label": "Customers",
+  "permission": [
+   "customers.manage"
+  ],
+  "columns": [
+   "name",
+   "mobile",
+   "email",
+   "address",
+   "gstin",
+   "stateCode",
+   "creditLimit",
+   "openingBalance"
+  ],
+  "example": {
+   "name": "Sample Customer",
+   "mobile": "",
+   "address": "Street, city",
+   "stateCode": "07",
+   "creditLimit": 5000,
+   "openingBalance": 0
+  },
+  "help": "Creates new customers. Duplicate mobile numbers or duplicate names with the same address are rejected. Opening balance is money owed to your store."
+ },
+ "suppliers": {
+  "label": "Suppliers",
+  "permission": [
+   "suppliers.manage"
+  ],
+  "columns": [
+   "companyName",
+   "contactPerson",
+   "mobile",
+   "email",
+   "address",
+   "gstin",
+   "stateCode",
+   "creditPeriodDays",
+   "openingBalance"
+  ],
+  "example": {
+   "companyName": "Sample Distributor",
+   "contactPerson": "Contact name",
+   "stateCode": "07",
+   "creditPeriodDays": 30,
+   "openingBalance": 0
+  },
+  "help": "Creates new suppliers. Duplicate mobile numbers or duplicate company names with the same address are rejected. Opening balance is money your store owes."
+ }
 }
